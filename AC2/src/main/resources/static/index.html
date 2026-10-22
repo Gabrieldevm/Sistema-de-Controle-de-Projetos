@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Projetos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 15px;
+            color: #333;
+        }
+
+        h1, h2 {
+            color: #222;
+        }
+
+        #mensagem {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+            font-weight: bold;
+        }
+
+        #mensagem.sucesso {
+            display: block;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        #mensagem.erro {
+            display: block;
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        form {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 30px;
+        }
+
+        .campo {
+            margin-bottom: 15px;
+        }
+
+        .campo label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .campo input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Controle de Projetos</h1>
+
+    <div id="mensagem"></div>
+
+    <h2>Novo Projeto</h2>
+    <form id="form-projeto" onsubmit="cadastrarProjeto(event)">
+        <div class="campo">
+            <label for="descricao">Descrição *</label>
+            <input type="text" id="descricao" required placeholder="Digite a descrição do projeto">
+        </div>
+
+        <div class="campo">
+            <label for="dataInicio">Data de Início *</label>
+            <input type="date" id="dataInicio" required>
+        </div>
+
+        <div class="campo">
+            <label for="dataFim">Data de Término</label>
+            <input type="date" id="dataFim">
+        </div>
+
+        <button type="submit">Cadastrar Projeto</button>
+    </form>
+
+    <h2>Projetos Cadastrados</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Descrição</th>
+                <th>Início</th>
+                <th>Fim</th>
+            </tr>
+        </thead>
+        <tbody id="tabela-projetos">
+        </tbody>
+    </table>
+
+    <script>
+        function mostrarMensagem(texto, tipo) {
+            const div = document.getElementById('mensagem');
+            div.textContent = texto;
+            div.className = tipo;
+        }
+
+        function formatarData(dataStr) {
+            if (!dataStr) return '-';
+            const partes = dataStr.split('-');
+            if (partes.length === 3) {
+                return partes[2] + '/' + partes[1] + '/' + partes[0];
+            }
+            return dataStr;
+        }
+
+        async function carregarProjetos() {
+            try {
+                const resposta = await fetch('/projetos');
+                if (!resposta.ok) {
+                    throw new Error('Erro ao buscar projetos do servidor');
+                }
+                const projetos = await resposta.json();
+
+                const tbody = document.getElementById('tabela-projetos');
+                tbody.innerHTML = '';
+
+                if (projetos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum projeto cadastrado.</td></tr>';
+                    return;
+                }
+
+                projetos.forEach(projeto => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${projeto.id}</td>
+                        <td>${projeto.descricao}</td>
+                        <td>${formatarData(projeto.dataInicio)}</td>
+                        <td>${formatarData(projeto.dataFim)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (erro) {
+                mostrarMensagem('Erro ao carregar a lista de projetos: ' + erro.message, 'erro');
+            }
+        }
+
+        async function cadastrarProjeto(event) {
+            event.preventDefault();
+
+            const novoProjeto = {
+                descricao: document.getElementById('descricao').value.trim(),
+                dataInicio: document.getElementById('dataInicio').value,
+                dataFim: document.getElementById('dataFim').value || null
+            };
+
+            try {
+                const resposta = await fetch('/projetos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(novoProjeto)
+                });
+
+                if (resposta.ok) {
+                    mostrarMensagem('Projeto cadastrado com sucesso', 'sucesso');
+                    document.getElementById('form-projeto').reset();
+                    carregarProjetos();
+                } else {
+                    const erroJson = await resposta.json();
+                    let mensagemErro = erroJson.message || erroJson.mensagem || erroJson.error || 'Erro ao cadastrar projeto';
+
+                    const listaErros = erroJson.details || erroJson.erros;
+                    if (Array.isArray(listaErros) && listaErros.length > 0) {
+                        mensagemErro += ' (' + listaErros.join(', ') + ')';
+                    }
+
+                    mostrarMensagem(mensagemErro, 'erro');
+                }
+            } catch (erro) {
+                mostrarMensagem('Falha de conexão com o servidor: ' + erro.message, 'erro');
+            }
+        }
+
+        carregarProjetos();
+    </script>
+
+</body>
+</html>
